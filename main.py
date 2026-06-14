@@ -143,7 +143,7 @@ class ManagementView(discord.ui.View):
 
 class VerifyView(discord.ui.View):
     def __init__(self): super().__init__(timeout=None)
-    @discord.ui.button(label="📝 ยืนยันตัวตน / จัดการไอดี", style=discord.ButtonStyle.success, custom_id="btn_verify_v4")
+    @discord.ui.button(label="📝 ยืนยันตัวตน", style=discord.ButtonStyle.success, custom_id="btn_verify_v4")
     async def verify_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         d_id = str(interaction.user.id)
         if d_id in users_db:
