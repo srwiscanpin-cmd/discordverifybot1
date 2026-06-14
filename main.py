@@ -11,8 +11,8 @@ import asyncio
 from flask import Flask, request as flask_request, jsonify
 
 # --- ⚙️ Configuration ---
-TOKEN = os.getenv('DISCORD_TOKEN')
-ADMIN_ID = int(os.getenv('ADMIN_ID', 1284107691723067454))
+TOKEN = os.getenv("DISCORD_TOKEN")
+ADMIN_ID = int(os.getenv("ADMIN_ID", 1284107691723067454))
 EXTRA_ROLE_ID = 1512850411554345030
 GACHA_COST = 1000
 
@@ -69,7 +69,7 @@ RANK_NAMES = {
 }
 
 # --- 🖥️ Database ---
-DB_FILE = 'users_db.json'
+DB_FILE = "users_db.json"
 users_db = {}
 active_sessions = {}
 
@@ -77,11 +77,11 @@ def load_db():
     global users_db
     if os.path.exists(DB_FILE):
         try:
-            with open(DB_FILE, 'r', encoding='utf-8') as f: users_db = json.load(f)
+            with open(DB_FILE, "r", encoding="utf-8") as f: users_db = json.load(f)
         except: users_db = {}
 
 def save_db():
-    with open(DB_FILE, 'w', encoding='utf-8') as f: json.dump(users_db, f, indent=4)
+    with open(DB_FILE, "w", encoding="utf-8") as f: json.dump(users_db, f, indent=4)
 
 load_db()
 
@@ -90,10 +90,10 @@ async def perform_sync_silent(guild, discord_id, roblox_username):
     try:
         member = await guild.fetch_member(int(discord_id))
         res_id = requests.post("https://users.roblox.com/v1/usernames/users", json={"usernames": [roblox_username]}, timeout=5 ).json()
-        r_id = res_id['data'][0]['id']
+        r_id = res_id["data"][0]["id"]
         res_groups = requests.get(f"https://groups.roblox.com/v1/users/{r_id}/groups/roles", timeout=5 ).json()
-        user_groups = {g['group']['id']: g['role']['rank'] for g in res_groups.get('data', [])}
-        rank_id = user_groups.get(GROUPS_CONFIG[0]['group_id'], 0)
+        user_groups = {g["group"]["id"]: g["role"]["rank"] for g in res_groups.get("data", [])}
+        rank_id = user_groups.get(GROUPS_CONFIG[0]["group_id"], 0)
         rank_name = RANK_NAMES.get(rank_id, f"Rank-{rank_id}")
         new_nick = (f"{rank_name} | {roblox_username}")[:32]
         if guild.owner_id != member.id:
@@ -101,11 +101,11 @@ async def perform_sync_silent(guild, discord_id, roblox_username):
             except: pass
         roles_to_add = []
         for config in GROUPS_CONFIG:
-            g_id = config['group_id']
+            g_id = config["group_id"]
             if g_id in user_groups:
                 u_rank = user_groups[g_id]
-                if u_rank in config['ranks']:
-                    for rid in config['ranks'][u_rank].get("add", []):
+                if u_rank in config["ranks"]:
+                    for rid in config["ranks"][u_rank].get("add", []):
                         role = guild.get_role(rid)
                         if role: roles_to_add.append(role)
         extra_role = guild.get_role(EXTRA_ROLE_ID)
@@ -115,14 +115,14 @@ async def perform_sync_silent(guild, discord_id, roblox_username):
     except: return False
 
 # --- 📝 UI Views ---
-class VerificationModal(discord.ui.Modal, title='ยืนยันตัวตน Roblox'):
-    username = discord.ui.TextInput(label='ชื่อใน Roblox', placeholder='ใส่ชื่อตัวละครของคุณที่นี่...')
+class VerificationModal(discord.ui.Modal, title=\'ยืนยันตัวตน Roblox\'):
+    username = discord.ui.TextInput(label=\'ชื่อใน Roblox\', placeholder=\'ใส่ชื่อตัวละครของคุณที่นี่...\')
     async def on_submit(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
         u_name = self.username.value.strip()
         try:
             res_user = requests.post("https://users.roblox.com/v1/usernames/users", json={"usernames": [u_name]}, timeout=5 ).json()
-            if not res_user.get('data'): return await interaction.followup.send("❌ ไม่พบชื่อ", ephemeral=True)
+            if not res_user.get("data"): return await interaction.followup.send("❌ ไม่พบชื่อ", ephemeral=True)
             code = str(uuid.uuid4())[:8]
             active_sessions[str(interaction.user.id)] = {"roblox_username": u_name, "verification_code": code}
             await interaction.followup.send(f"✅ รหัสของคุณคือ: **{code}**\nนำไปใส่ในเกมแล้วกลับมาอัปเดตยศครับ", ephemeral=True)
@@ -132,33 +132,32 @@ class ManagementView(discord.ui.View):
     def __init__(self, roblox_username):
         super().__init__(timeout=None)
         self.roblox_username = roblox_username
-    @discord.ui.button(label="🔄 อัปเดตยศล่าสุด", style=discord.ButtonStyle.primary, custom_id="btn_sync_v4")
+    @discord.ui.button(label="🔄 อัปเดตยศล่าสุด", style=discord.ButtonStyle.primary, custom_id="btn_sync_v3")
     async def update_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
         await perform_sync_silent(interaction.guild, interaction.user.id, self.roblox_username)
-        await interaction.followup.send(f"✅ อัปเดตยศสำหรับ **{self.roblox_username}** สำเร็จ!", ephemeral=True)
-    @discord.ui.button(label="⚙️ ผูกไอดีใหม่", style=discord.ButtonStyle.secondary, custom_id="btn_reverify_v4")
+        await interaction.followup.send("✅ อัปเดตเรียบร้อย!", ephemeral=True)
+    @discord.ui.button(label="⚙️ ผูกไอดีใหม่", style=discord.ButtonStyle.secondary, custom_id="btn_reverify_v3")
     async def reverify_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(VerificationModal())
 
 class VerifyView(discord.ui.View):
     def __init__(self): super().__init__(timeout=None)
-    @discord.ui.button(label="📝 ยืนยันตัวตน", style=discord.ButtonStyle.success, custom_id="btn_verify_v4")
+    @discord.ui.button(label="📝 ยืนยันตัวตน / จัดการไอดี", style=discord.ButtonStyle.success, custom_id="btn_verify_v3")
     async def verify_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         d_id = str(interaction.user.id)
         if d_id in users_db:
             username = users_db[d_id].get("roblox_username", "Unknown")
-            embed = discord.Embed(title="⚙️ จัดการบัญชีของคุณ", description=f"ปัจจุบันคุณผูกไว้กับไอดี: **{username}**", color=discord.Color.blue())
-            await interaction.response.send_message(embed=embed, view=ManagementView(username), ephemeral=True)
+            await interaction.response.send_message(f"⚙️ คุณผูกไอดีไว้กับ: **{username}**", view=ManagementView(username), ephemeral=True)
         else: await interaction.response.send_modal(VerificationModal())
 
 class GachaView(discord.ui.View):
     def __init__(self): super().__init__(timeout=None)
-    @discord.ui.button(label="เช็ค EXP", style=discord.ButtonStyle.primary, custom_id="btn_xp_v4")
+    @discord.ui.button(label="เช็ค EXP", style=discord.ButtonStyle.primary, custom_id="btn_xp_v3")
     async def xp_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         xp = users_db.get(str(interaction.user.id), {}).get("xp", 0)
         await interaction.response.send_message(f"✨ EXP ของคุณคือ: `{xp:,}`", ephemeral=True)
-    @discord.ui.button(label="สุ่ม Role", style=discord.ButtonStyle.success, custom_id="btn_roll_v4")
+    @discord.ui.button(label="สุ่ม Role", style=discord.ButtonStyle.success, custom_id="btn_roll_v3")
     async def roll_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         d_id = str(interaction.user.id)
         if d_id not in users_db: return await interaction.response.send_message("❌ ต้องยืนยันตัวตนก่อน", ephemeral=True)
@@ -179,7 +178,7 @@ bot = MyBot()
 
 @bot.event
 async def on_ready():
-    print(f'✅ Logged in as {bot.user}')
+    print(f\"✅ Logged in as {bot.user}\")
     if not xp_task.is_running(): xp_task.start()
 
 @bot.tree.command(name="setup_verify")
@@ -214,7 +213,10 @@ def check_code():
             future = asyncio.run_coroutine_threadsafe(bot.fetch_user(int(d_id)), bot.loop)
             try:
                 user = future.result(timeout=10)
-                return jsonify({"success": True, "discord_name": str(user)}), 200
+                # ใช้ Proxy ของ i2.wp.com เพื่อให้ Roblox โหลดรูปได้ (ถ้า Roblox ยอม)
+                raw_url = str(user.display_avatar.url).replace("https://", "" )
+                proxy_url = f"https://i2.wp.com/{raw_url}"
+                return jsonify({"success": True, "discord_name": str(user ), "avatar_url": proxy_url}), 200
             except: break
     return jsonify({"success": False}), 400
 
