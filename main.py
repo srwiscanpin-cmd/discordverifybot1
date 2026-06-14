@@ -118,7 +118,6 @@ async def perform_sync_silent(guild, discord_id, roblox_username):
         
         extra_role = guild.get_role(EXTRA_ROLE_ID)
         if extra_role: roles_to_add.append(extra_role)
-        
         if roles_to_add: await member.add_roles(*roles_to_add)
         return True
     except: return False
@@ -159,23 +158,20 @@ class VerifyView(discord.ui.View):
 
 class GachaView(discord.ui.View):
     def __init__(self): super().__init__(timeout=None)
-    @discord.ui.button(label="เช็ค EXP", style=discord.ButtonStyle.primary, emoji="📊", custom_id="btn_xp_persistent")
+    @discord.ui.button(label="เช็ค EXP", style=discord.ButtonStyle.primary, custom_id="btn_xp_persistent")
     async def xp_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         xp = users_db.get(str(interaction.user.id), {}).get("xp", 0)
         await interaction.response.send_message(f"✨ EXP ของคุณคือ: `{xp:,}`", ephemeral=True)
-    @discord.ui.button(label="สุ่ม Role", style=discord.ButtonStyle.success, emoji="🎲", custom_id="btn_roll_persistent")
+    @discord.ui.button(label="สุ่ม Role", style=discord.ButtonStyle.success, custom_id="btn_roll_persistent")
     async def roll_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         d_id = str(interaction.user.id)
         if d_id not in users_db: return await interaction.response.send_message("❌ ต้องยืนยันตัวตนก่อน", ephemeral=True)
         if users_db[d_id].get("xp", 0) < GACHA_COST: return await interaction.response.send_message("❌ EXP ไม่พอ", ephemeral=True)
         users_db[d_id]["xp"] -= GACHA_COST
         save_db()
-        # 50% chance as per image
         outcome = random.choices(["Salt", "Reward"], weights=[50, 50])[0]
-        if outcome == "Salt":
-            await interaction.response.send_message("🧂 เกลือจ้า! พยายามใหม่นะ", ephemeral=True)
-        else:
-            await interaction.response.send_message("🎖️ ยินดีด้วย! คุณได้รับยศ **ร้อยตรี**\nโปรดติดต่อแอดมินเพื่อรับยศครับ!", ephemeral=True)
+        if outcome == "Salt": await interaction.response.send_message("🧂 เกลือจ้า! พยายามใหม่นะ", ephemeral=True)
+        else: await interaction.response.send_message("🎖️ ยินดีด้วย! คุณได้รับยศ **ร้อยตรี**\nโปรดติดต่อแอดมินเพื่อรับยศครับ!", ephemeral=True)
 
 # --- 🤖 Main Bot Class ---
 class MyBot(commands.Bot):
@@ -203,11 +199,7 @@ async def setup_verify(interaction: discord.Interaction):
 @bot.tree.command(name="setup_gacha", description="ติดตั้งแผงกาชา")
 async def setup_gacha(interaction: discord.Interaction):
     if interaction.user.id != ADMIN_ID: return
-    embed = discord.Embed(
-        title="🎲 ระบบ สุ่มยศ และ เช็ค EXP", 
-        description=f"ใช้ `{GACHA_COST:,}` EXP ต่อการสุ่ม\n\n🎖️ **ร้อยตรี** (50%)\n🧂 **เกลือ** (50%)", 
-        color=discord.Color.gold()
-    )
+    embed = discord.Embed(title="🎰 ระบบสุ่มยศ", description=f"ใช้ {GACHA_COST:,} EXP ต่อการสุ่ม 1 ครั้ง", color=discord.Color.gold())
     await interaction.channel.send(embed=embed, view=GachaView())
     await interaction.response.send_message("✅ ติดตั้งแผงกาชาสำเร็จ", ephemeral=True)
 
@@ -233,6 +225,22 @@ async def xp_task():
 app = Flask(__name__)
 @app.route('/')
 def home(): return "Online"
+
+@app.route("/check_code", methods=["POST"])
+def check_code():
+    data = flask_request.json
+    code = data.get("verification_code")
+    for d_id, s in active_sessions.items():
+        if s["verification_code"] == code:
+            user = bot.get_user(int(d_id))
+            if user:
+                return jsonify({
+                    "success": True,
+                    "discord_name": str(user),
+                    "avatar_url": str(user.display_avatar.url)
+                }), 200
+    return jsonify({"success": False}), 400
+
 @app.route("/complete_verification", methods=["POST"])
 def complete_verification():
     data = flask_request.json
