@@ -115,8 +115,8 @@ async def perform_sync_silent(guild, discord_id, roblox_username):
     except: return False
 
 # --- 📝 UI Views ---
-class VerificationModal(discord.ui.Modal, title=\'ยืนยันตัวตน Roblox\'):
-    username = discord.ui.TextInput(label=\'ชื่อใน Roblox\', placeholder=\'ใส่ชื่อตัวละครของคุณที่นี่...\')
+class VerificationModal(discord.ui.Modal, title='ยืนยันตัวตน Roblox'):
+    username = discord.ui.TextInput(label='ชื่อใน Roblox', placeholder='ใส่ชื่อตัวละครของคุณที่นี่...')
     async def on_submit(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
         u_name = self.username.value.strip()
@@ -128,36 +128,28 @@ class VerificationModal(discord.ui.Modal, title=\'ยืนยันตัวต
             await interaction.followup.send(f"✅ รหัสของคุณคือ: **{code}**\nนำไปใส่ในเกมแล้วกลับมาอัปเดตยศครับ", ephemeral=True)
         except: await interaction.followup.send("❌ ระบบขัดข้อง", ephemeral=True)
 
-class ManagementView(discord.ui.View):
-    def __init__(self, roblox_username):
-        super().__init__(timeout=None)
-        self.roblox_username = roblox_username
-    @discord.ui.button(label="🔄 อัปเดตยศล่าสุด", style=discord.ButtonStyle.primary, custom_id="btn_sync_v3")
-    async def update_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.defer(ephemeral=True)
-        await perform_sync_silent(interaction.guild, interaction.user.id, self.roblox_username)
-        await interaction.followup.send("✅ อัปเดตเรียบร้อย!", ephemeral=True)
-    @discord.ui.button(label="⚙️ ผูกไอดีใหม่", style=discord.ButtonStyle.secondary, custom_id="btn_reverify_v3")
-    async def reverify_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(VerificationModal())
-
 class VerifyView(discord.ui.View):
     def __init__(self): super().__init__(timeout=None)
-    @discord.ui.button(label="📝 ยืนยันตัวตน / จัดการไอดี", style=discord.ButtonStyle.success, custom_id="btn_verify_v3")
+    @discord.ui.button(label="📝 ยืนยันตัวตน", style=discord.ButtonStyle.success, custom_id="btn_verify_v6")
     async def verify_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         d_id = str(interaction.user.id)
         if d_id in users_db:
             username = users_db[d_id].get("roblox_username", "Unknown")
-            await interaction.response.send_message(f"⚙️ คุณผูกไอดีไว้กับ: **{username}**", view=ManagementView(username), ephemeral=True)
+            embed = discord.Embed(
+                title="✅ ยืนยันตัวตนสำเร็จแล้ว",
+                description=f"คุณเชื่อมต่อไว้กับไอดี: **{username}**",
+                color=discord.Color.green()
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
         else: await interaction.response.send_modal(VerificationModal())
 
 class GachaView(discord.ui.View):
     def __init__(self): super().__init__(timeout=None)
-    @discord.ui.button(label="เช็ค EXP", style=discord.ButtonStyle.primary, custom_id="btn_xp_v3")
+    @discord.ui.button(label="📊 เช็ค EXP", style=discord.ButtonStyle.primary, custom_id="btn_xp_v6")
     async def xp_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         xp = users_db.get(str(interaction.user.id), {}).get("xp", 0)
         await interaction.response.send_message(f"✨ EXP ของคุณคือ: `{xp:,}`", ephemeral=True)
-    @discord.ui.button(label="สุ่ม Role", style=discord.ButtonStyle.success, custom_id="btn_roll_v3")
+    @discord.ui.button(label="🎲 สุ่ม Role", style=discord.ButtonStyle.success, custom_id="btn_roll_v6")
     async def roll_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         d_id = str(interaction.user.id)
         if d_id not in users_db: return await interaction.response.send_message("❌ ต้องยืนยันตัวตนก่อน", ephemeral=True)
@@ -171,14 +163,14 @@ class GachaView(discord.ui.View):
 class MyBot(commands.Bot):
     def __init__(self): super().__init__(command_prefix="!", intents=discord.Intents.all())
     async def setup_hook(self):
-        self.add_view(VerifyView()); self.add_view(GachaView()); self.add_view(ManagementView(""))
+        self.add_view(VerifyView()); self.add_view(GachaView())
         await self.tree.sync()
 
 bot = MyBot()
 
 @bot.event
 async def on_ready():
-    print(f\"✅ Logged in as {bot.user}\")
+    print(f"✅ Logged in as {bot.user}")
     if not xp_task.is_running(): xp_task.start()
 
 @bot.tree.command(name="setup_verify")
@@ -190,8 +182,19 @@ async def setup_verify(interaction: discord.Interaction):
 @bot.tree.command(name="setup_gacha")
 async def setup_gacha(interaction: discord.Interaction):
     if interaction.user.id != ADMIN_ID: return
-    await interaction.channel.send(embed=discord.Embed(title="🎰 ระบบสุ่มยศ", description=f"ใช้ {GACHA_COST:,} EXP ต่อการสุ่ม 1 ครั้ง", color=discord.Color.gold()), view=GachaView())
+    embed = discord.Embed(title="🎲 ระบบ สุ่มยศ และ เช็ค EXP", description=f"ใช้ {GACHA_COST:,} EXP ต่อการสุ่ม\n\n🎖️ ร้อยตรี (50%)\n🧂 เกลือ (50%)", color=discord.Color.gold())
+    await interaction.channel.send(embed=embed, view=GachaView())
     await interaction.response.send_message("✅ ติดตั้งแผงกาชาสำเร็จ", ephemeral=True)
+
+@bot.tree.command(name="add_xp")
+@app_commands.describe(member="สมาชิกที่ต้องการเพิ่ม XP", amount="จำนวน XP")
+async def add_xp(interaction: discord.Interaction, member: discord.Member, amount: int):
+    if interaction.user.id != ADMIN_ID: return await interaction.response.send_message("❌ เฉพาะแอดมินเท่านั้น", ephemeral=True)
+    d_id = str(member.id)
+    if d_id not in users_db: users_db[d_id] = {"roblox_username": "Unknown", "xp": 0}
+    users_db[d_id]["xp"] += amount
+    save_db()
+    await interaction.response.send_message(f"✅ เพิ่ม `{amount:,}` XP ให้กับ {member.mention} เรียบร้อย!", ephemeral=True)
 
 @tasks.loop(minutes=1.0)
 async def xp_task():
@@ -213,7 +216,6 @@ def check_code():
             future = asyncio.run_coroutine_threadsafe(bot.fetch_user(int(d_id)), bot.loop)
             try:
                 user = future.result(timeout=10)
-                # ใช้ Proxy ของ i2.wp.com เพื่อให้ Roblox โหลดรูปได้ (ถ้า Roblox ยอม)
                 raw_url = str(user.display_avatar.url).replace("https://", "" )
                 proxy_url = f"https://i2.wp.com/{raw_url}"
                 return jsonify({"success": True, "discord_name": str(user ), "avatar_url": proxy_url}), 200
