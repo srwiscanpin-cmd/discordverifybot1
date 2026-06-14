@@ -107,33 +107,23 @@ async def perform_sync_silent(guild, discord_id, roblox_username):
             except: pass
             
         roles_to_add = []
-        roles_to_remove = []
         for config in GROUPS_CONFIG:
             g_id = config['group_id']
             if g_id in user_groups:
                 u_rank = user_groups[g_id]
                 if u_rank in config['ranks']:
-                    rank_data = config['ranks'][u_rank]
-                    for rid in rank_data.get("add", []):
+                    for rid in config['ranks'][u_rank].get("add", []):
                         role = guild.get_role(rid)
                         if role: roles_to_add.append(role)
-                    for rid in rank_data.get("remove", []):
-                        role = guild.get_role(rid)
-                        if role: roles_to_remove.append(role)
         
         extra_role = guild.get_role(EXTRA_ROLE_ID)
         if extra_role: roles_to_add.append(extra_role)
         
-        if roles_to_remove:
-            try: await member.remove_roles(*roles_to_remove)
-            except: pass
-        if roles_to_add:
-            try: await member.add_roles(*roles_to_add)
-            except: pass
+        if roles_to_add: await member.add_roles(*roles_to_add)
         return True
     except: return False
 
-# --- 📝 UI Components (Persistent) ---
+# --- 📝 UI Components ---
 class VerificationModal(discord.ui.Modal, title='ยืนยันตัวตน Roblox'):
     username = discord.ui.TextInput(label='ชื่อใน Roblox', placeholder='ใส่ชื่อตัวละครของคุณที่นี่...')
     async def on_submit(self, interaction: discord.Interaction):
@@ -169,19 +159,23 @@ class VerifyView(discord.ui.View):
 
 class GachaView(discord.ui.View):
     def __init__(self): super().__init__(timeout=None)
-    @discord.ui.button(label="เช็ค EXP", style=discord.ButtonStyle.primary, custom_id="btn_xp_persistent")
+    @discord.ui.button(label="เช็ค EXP", style=discord.ButtonStyle.primary, emoji="📊", custom_id="btn_xp_persistent")
     async def xp_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         xp = users_db.get(str(interaction.user.id), {}).get("xp", 0)
-        await interaction.response.send_message(f"✨ EXP ของคุณ: `{xp:,}`", ephemeral=True)
-    @discord.ui.button(label="สุ่ม Role", style=discord.ButtonStyle.success, custom_id="btn_roll_persistent")
+        await interaction.response.send_message(f"✨ EXP ของคุณคือ: `{xp:,}`", ephemeral=True)
+    @discord.ui.button(label="สุ่ม Role", style=discord.ButtonStyle.success, emoji="🎲", custom_id="btn_roll_persistent")
     async def roll_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         d_id = str(interaction.user.id)
         if d_id not in users_db: return await interaction.response.send_message("❌ ต้องยืนยันตัวตนก่อน", ephemeral=True)
         if users_db[d_id].get("xp", 0) < GACHA_COST: return await interaction.response.send_message("❌ EXP ไม่พอ", ephemeral=True)
         users_db[d_id]["xp"] -= GACHA_COST
         save_db()
-        res = "🎖️ ยินดีด้วย! ได้รับยศ **ร้อยตำรวจตรี**" if random.random() < 0.35 else "🧂 เกลือจ้า!"
-        await interaction.response.send_message(res, ephemeral=True)
+        # 50% chance as per image
+        outcome = random.choices(["Salt", "Reward"], weights=[50, 50])[0]
+        if outcome == "Salt":
+            await interaction.response.send_message("🧂 เกลือจ้า! พยายามใหม่นะ", ephemeral=True)
+        else:
+            await interaction.response.send_message("🎖️ ยินดีด้วย! คุณได้รับยศ **ร้อยตรี**\nโปรดติดต่อแอดมินเพื่อรับยศครับ!", ephemeral=True)
 
 # --- 🤖 Main Bot Class ---
 class MyBot(commands.Bot):
@@ -191,7 +185,6 @@ class MyBot(commands.Bot):
         self.add_view(VerifyView())
         self.add_view(GachaView())
         await self.tree.sync()
-        print("✅ Slash Commands Synced & Persistent Views Added")
 
 bot = MyBot()
 
@@ -203,16 +196,29 @@ async def on_ready():
 # --- 👑 Admin Commands ---
 @bot.tree.command(name="setup_verify", description="ติดตั้งแผงยืนยันตัวตน")
 async def setup_verify(interaction: discord.Interaction):
-    if interaction.user.id == ADMIN_ID:
-        await interaction.channel.send(embed=discord.Embed(title="🛡️ ระบบยืนยันตัวตน", description="กดปุ่มด้านล่างเพื่อเริ่มขั้นตอน", color=discord.Color.blue()), view=VerifyView())
-        await interaction.response.send_message("✅ ติดตั้งแผงยืนยันสำเร็จ", ephemeral=True)
+    if interaction.user.id != ADMIN_ID: return
+    await interaction.channel.send(embed=discord.Embed(title="🛡️ ระบบยืนยันตัวตน", color=discord.Color.blue()), view=VerifyView())
+    await interaction.response.send_message("✅ ติดตั้งแผงยืนยันสำเร็จ", ephemeral=True)
 
 @bot.tree.command(name="setup_gacha", description="ติดตั้งแผงกาชา")
 async def setup_gacha(interaction: discord.Interaction):
-    if interaction.user.id == ADMIN_ID:
-        embed = discord.Embed(title="🎰 ระบบสุ่มยศ", description=f"ใช้ {GACHA_COST:,} EXP ต่อการสุ่ม 1 ครั้ง", color=discord.Color.gold())
-        await interaction.channel.send(embed=embed, view=GachaView())
-        await interaction.response.send_message("✅ ติดตั้งแผงกาชาสำเร็จ", ephemeral=True)
+    if interaction.user.id != ADMIN_ID: return
+    embed = discord.Embed(
+        title="🎲 ระบบ สุ่มยศ และ เช็ค EXP", 
+        description=f"ใช้ `{GACHA_COST:,}` EXP ต่อการสุ่ม\n\n🎖️ **ร้อยตรี** (50%)\n🧂 **เกลือ** (50%)", 
+        color=discord.Color.gold()
+    )
+    await interaction.channel.send(embed=embed, view=GachaView())
+    await interaction.response.send_message("✅ ติดตั้งแผงกาชาสำเร็จ", ephemeral=True)
+
+@bot.tree.command(name="add_xp", description="เพิ่ม EXP (Admin)")
+async def add_xp(interaction: discord.Interaction, member: discord.Member, amount: int):
+    if interaction.user.id != ADMIN_ID: return
+    m_id = str(member.id)
+    if m_id not in users_db: users_db[m_id] = {"xp": 0}
+    users_db[m_id]["xp"] += amount
+    save_db()
+    await interaction.response.send_message(f"✅ เพิ่ม `{amount:,}` EXP ให้ {member.mention}", ephemeral=True)
 
 # --- 🕒 XP System ---
 @tasks.loop(minutes=1.0)
@@ -227,7 +233,6 @@ async def xp_task():
 app = Flask(__name__)
 @app.route('/')
 def home(): return "Online"
-
 @app.route("/complete_verification", methods=["POST"])
 def complete_verification():
     data = flask_request.json
