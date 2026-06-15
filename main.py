@@ -133,10 +133,10 @@ class ManagementView(discord.ui.View):
     def __init__(self, username):
         super().__init__(timeout=None)
         self.username = username
-    @discord.ui.button(label="🔄 เปลี่ยน Account", style=discord.ButtonStyle.primary, custom_id="btn_reverify_v10")
+    @discord.ui.button(label="🔄 เปลี่ยน Account", style=discord.ButtonStyle.primary, custom_id="btn_reverify_v12")
     async def reverify(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(VerificationModal())
-    @discord.ui.button(label="🔄 อัพเดทยศ", style=discord.ButtonStyle.success, custom_id="btn_update_rank_v10")
+    @discord.ui.button(label="🔄 อัพเดทยศ", style=discord.ButtonStyle.success, custom_id="btn_update_rank_v12")
     async def update_rank(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
         success = await perform_sync_silent(interaction.guild, interaction.user.id, self.username)
@@ -145,7 +145,7 @@ class ManagementView(discord.ui.View):
 
 class VerifyView(discord.ui.View):
     def __init__(self): super().__init__(timeout=None)
-    @discord.ui.button(label="📝 ยืนยันตัวตน", style=discord.ButtonStyle.success, custom_id="btn_verify_v10")
+    @discord.ui.button(label="📝 ยืนยันตัวตน", style=discord.ButtonStyle.success, custom_id="btn_verify_v12")
     async def verify_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         d_id = str(interaction.user.id)
         if d_id in users_db:
@@ -162,19 +162,28 @@ class VerifyView(discord.ui.View):
 
 class GachaView(discord.ui.View):
     def __init__(self): super().__init__(timeout=None)
-    @discord.ui.button(label="📊 เช็ค EXP", style=discord.ButtonStyle.primary, custom_id="btn_xp_v10")
+    @discord.ui.button(label="📊 เช็ค EXP", style=discord.ButtonStyle.primary, custom_id="btn_xp_v12")
     async def xp_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         xp = users_db.get(str(interaction.user.id), {}).get("xp", 0)
         await interaction.response.send_message(f"✨ EXP ของคุณคือ: `{xp:,}`", ephemeral=True)
-    @discord.ui.button(label="🎲 สุ่ม Role", style=discord.ButtonStyle.success, custom_id="btn_roll_v10")
+    @discord.ui.button(label="🎲 สุ่ม Role", style=discord.ButtonStyle.success, custom_id="btn_roll_v12")
     async def roll_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         d_id = str(interaction.user.id)
         if d_id not in users_db: return await interaction.response.send_message("❌ ต้องยืนยันตัวตนก่อน", ephemeral=True)
-        if users_db[d_id].get("xp", 0) < GACHA_COST: return await interaction.response.send_message("❌ EXP ไม่พอ", ephemeral=True)
+        if users_db[d_id].get("xp", 0) < GACHA_COST: return await interaction.response.send_message(f"❌ EXP ไม่พอ (ต้องใช้ {GACHA_COST:,} EXP)", ephemeral=True)
+        
         users_db[d_id]["xp"] -= GACHA_COST
         save_db()
-        if random.random() < 0.5: await interaction.response.send_message("🎖️ ยินดีด้วย! คุณได้รับยศ **ร้อยตรี**", ephemeral=True)
-        else: await interaction.response.send_message("🧂 เกลือจ้า!", ephemeral=True)
+        
+        roll = random.random()
+        if roll < 0.15: # 15%
+            await interaction.response.send_message("🎖️ **ยินดีด้วย!** คุณได้รับยศ **ร้อยตรี**", ephemeral=True)
+        elif roll < 0.35: # 20% (0.15 + 0.20)
+            await interaction.response.send_message("🌟 **รางวัลพิเศษ!** คุณได้รับแต้มคืน **500 EXP**!", ephemeral=True)
+            users_db[d_id]["xp"] += 500
+            save_db()
+        else: # 65%
+            await interaction.response.send_message("🧂 **เกลือจ้า!** พยายามใหม่ครั้งหน้านะ", ephemeral=True)
 
 # --- 🤖 Bot ---
 class MyBot(commands.Bot):
@@ -199,7 +208,11 @@ async def setup_verify(interaction: discord.Interaction):
 @bot.tree.command(name="setup_gacha")
 async def setup_gacha(interaction: discord.Interaction):
     if interaction.user.id != ADMIN_ID: return
-    embed = discord.Embed(title="🎲 ระบบ สุ่มยศ และ เช็ค EXP", description=f"ใช้ {GACHA_COST:,} EXP ต่อการสุ่ม\n\n🎖️ ร้อยตรี (50%)\n🧂 เกลือ (50%)", color=discord.Color.gold())
+    embed = discord.Embed(
+        title="🎲 ระบบ สุ่มยศ และ เช็ค EXP", 
+        description=f"ใช้ {GACHA_COST:,} EXP ต่อการสุ่ม\n\n🎖️ **ร้อยตรี** (15%)\n🌟 **รางวัลพิเศษ** (20%)\n🧂 **เกลือ** (65%)", 
+        color=discord.Color.gold()
+    )
     await interaction.channel.send(embed=embed, view=GachaView())
     await interaction.response.send_message("✅ ติดตั้งแผงกาชาสำเร็จ", ephemeral=True)
 
